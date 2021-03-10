@@ -1,0 +1,146 @@
+<!D0CTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <title>WebGL TEST</title>
+        <script src="script.js" type="text/javascript"></script>
+        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
+        <script src="gui.js" type="text/javascript"></script>
+
+        <script id="vs" type="vertex-shader">#version 300 es
+in vec3 vPos;
+out vec2 fragCoord;
+out vec2 texCoord;
+void main() {
+    fragCoord = (vPos.xy + vec2(1., 1.))/2.;
+    texCoord = vec2(fragCoord.x, 1. - fragCoord.y);
+    gl_Position = vec4(vPos, 1.);
+}
+        </script>
+        <script id="buildingfs" type="fragment-shader">#version 300 es
+precision mediump float;
+in vec2 fragCoord;
+layout (location = 0) out vec4 fragColor;
+uniform vec2 resolution;
+uniform vec2 omouse;
+uniform vec2 mouse;
+uniform float mousePress;
+uniform float wheel;
+uniform float time;
+
+uniform float _Box_width;
+uniform float _Box_height;
+uniform float _Box_space;
+uniform float _Twist;
+
+float sd4Box( vec3 p, vec3 b, float e ){
+    p = abs(p)-b;
+    vec3 q = abs(p+e)-e;
+    return length(max(vec3(q.x,p.y,q.z),0.0))+min(max(q.x,max(p.y,q.z)),0.0);
+}
+
+float sdCylinder( vec3 p, vec3 c ){
+    return length(p.xz-c.xy)-c.z;
+}
+
+mat2 rotate2D(float a){
+    float c = cos(a), s = sin(a);
+    return mat2(c,s,-s,c);
+}
+
+float dist_func(vec3 p){
+    //return ifs(p);
+    vec3 q;
+    q.xz = rotate2D(_Twist*p.y) * p.xz;
+    q.y = p.y;
+    return min(sd4Box(q, vec3(_Box_space, _Box_height, _Box_space), _Box_space*_Box_width)-0.005,
+        sdCylinder( p, vec3(0,0,  _Box_space*0.3) ));
+}
+
+vec3 get_n(vec3 p){
+    float ep = 0.0001;
+    vec3 epx = vec3(ep, 0., 0.);
+    vec3 epy = vec3(0., ep, 0.);
+    vec3 epz = vec3(0., 0., ep);
+    return normalize(vec3(
+        dist_func(p+epx)-dist_func(p-epx),
+        dist_func(p+epy)-dist_func(p-epy),
+        dist_func(p+epz)-dist_func(p-epz)
+    ));
+}
+
+void main() {
+    float t = time;
+    vec2 uv = (fragCoord * 2. - 1.)*resolution/min(resolution.x,resolution.y);
+    uv /= 1. + length(uv)*.1;
+    
+    // camera
+    vec3 camera = vec3(0);
+    vec3 ro = vec3(cos(t)*1.5, 0, sin(t)*1.5) + camera;
+    
+    vec3 lookat = vec3(0) + camera;
+    float zoom = wheel*0.1 + 1.;
+    vec3 lightdir = vec3(0,-1,1);
+
+    vec3 f = normalize(lookat-ro);
+    vec3 vertical = normalize(cross(vec3(0,1,0), f));
+    vec3 horizontal = cross(f, vertical);
+    vec3 i = ro + f*zoom + uv.x * vertical + uv.y * horizontal;
+    // ray direction
+    vec3 rdir = normalize(i - ro);
+
+    vec3 ray = ro;
+    vec3 col = vec3(1);
+
+    float d;
+    
+    for(int i = 0; i < 64; i++){
+        d = dist_func(ray);
+        if(d < 0.001){
+            break;
+        }
+        ray += rdir * d*0.5;
+    }
+
+    if(d < 0.001){
+        vec3 n = get_n(ray);
+        col = vec3(dot(n, -rdir)*0.7+0.3);
+    }
+    fragColor.xyz = col;
+    fragColor.w = 1.;
+}
+        </script>
+        <script id="fsp" type="fragment-shader">#version 300 es
+precision mediump float;
+in vec2 fragCoord;
+layout (location = 0) out vec4 fragColor;
+uniform sampler2D cloudTex;
+uniform sampler2D buildingTex;
+
+void main() {
+    vec4 cloud = texture(cloudTex, fragCoord);
+    vec4 hex = texture(buildingTex, fragCoord);
+    vec3 sky = mix(vec3(0.8, 0.85, 0.9), vec3(0.25, 0.3, 0.4), fragCoord.y);
+
+    fragColor.xyz = hex.xyz;//mix(hex.xyz, cloud.xyz, cloud.w);
+    fragColor.w = 1.;
+}
+        </script>
+        <style type="text/css">
+            body{
+                margin : 0px ;
+                padding : 0px ;
+            }
+            body #wrapper{
+                width: 100%;
+                height: 100%;
+                position: fixed;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="wrapper">
+            <canvas id="canvas"></canvas>
+        </div>
+    </body>
+</html>
