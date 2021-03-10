@@ -87,6 +87,7 @@ vec3 get_n(vec3 p){
     ));
 }
 
+#define MAX_MARCH 64
 void main() {
     float t = time*0.1;
     vec2 uv = (fragCoord * 2. - 1.)*resolution/min(resolution.x,resolution.y);
@@ -110,10 +111,13 @@ void main() {
     vec3 ray = ro;
     vec3 col = vec3(1);
 
+ 
     float d;
-    
-    for(int i = 0; i < 64; i++){
+    float dmin = 1.;
+    int march;
+    for(march = 0; march < MAX_MARCH; march++){
         d = dist_func(ray);
+        dmin = min(dmin, d);
         if(d < 0.001){
             break;
         }
@@ -124,6 +128,14 @@ void main() {
         vec3 n = get_n(ray);
         col = vec3(dot(n, -rdir)*0.7+0.3);
     }
+
+    float closeness = float(march) / float(MAX_MARCH);
+    float ao = 1.0 - closeness;
+    col *= ao;
+
+    float glow = pow(dmin + 2., -1.5);
+    col += glow;
+
     fragColor.xyz = col;
     fragColor.w = 1.;
 }
