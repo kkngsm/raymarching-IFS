@@ -33,6 +33,11 @@ uniform float _Box_height;
 uniform float _Box_space;
 uniform float _Twist;
 
+float sdRoundBox( vec3 p, vec3 b, float r ){
+    vec3 q = abs(p) - b;
+    return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
+}
+
 float sd4Box( vec3 p, vec3 b, float e ){
     p = abs(p)-b;
     vec3 q = abs(p+e)-e;
@@ -48,13 +53,26 @@ mat2 rotate2D(float a){
     return mat2(c,s,-s,c);
 }
 
+#define ITER 4
+float ifs(vec3 p){
+    mat2 rot = rotate2D(1.03);
+    for(int i=0; i<ITER; i++){
+        p = abs(p)-.075;
+        p.xz *= rot;
+        p.xy *= rot;
+    }
+    return sdRoundBox(p, vec3(.05), 0.004);
+}
+
 float dist_func(vec3 p){
-    //return ifs(p);
-    vec3 q;
-    q.xz = rotate2D(_Twist*p.y) * p.xz;
+    float d = ifs(p);
+
+    vec3 q = p;
+    q.xz *= rotate2D(-_Twist*p.y+time);
     q.y = p.y;
-    return min(sd4Box(q, vec3(_Box_space, _Box_height, _Box_space), _Box_space*_Box_width)-0.005,
-        sdCylinder( p, vec3(0,0,  _Box_space*0.3) ));
+
+    d = min(d, sd4Box(q, vec3(_Box_space, _Box_height, _Box_space), _Box_space*_Box_width)-0.005);
+    return min(d, sdCylinder( p, vec3(0,0,  _Box_space*0.3) ));
 }
 
 vec3 get_n(vec3 p){
@@ -70,7 +88,7 @@ vec3 get_n(vec3 p){
 }
 
 void main() {
-    float t = time;
+    float t = time*0.1;
     vec2 uv = (fragCoord * 2. - 1.)*resolution/min(resolution.x,resolution.y);
     uv /= 1. + length(uv)*.1;
     
